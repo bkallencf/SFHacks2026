@@ -49,7 +49,6 @@ export default function SFMap({ searchAddress }) {
      * Takes in an address from the search bar, converts it into lat & lng, and verifies it's w/in the bounds
      * Then, calculates 20 of each nearby location based on categories (grocery_store, school, park, shopping_mall)
      */
-
     useEffect(() => {
         if (!searchAddress || !window.google || !geoCoderRef.current || !boundsRef.current) return;
 
@@ -81,14 +80,10 @@ export default function SFMap({ searchAddress }) {
                 cache: "no-store",
                 body: JSON.stringify({ lat, lng }),
             })
-            .then((res) =>
-                res.text().then((text) => ({ ok: res.ok, status: res.status, text }))
-            )
-            .then(({ ok, status, text }) => {
-                if (!ok) {
-                    return;
-                }
-                const data = JSON.parse(text);
+            .then(res => res.json())
+            .then((payload) => {
+                const data = payload.nearbyLocations; // <-- correct extraction
+
                 setPlacesData(data);
 
                 // Clear out old markers on the map
