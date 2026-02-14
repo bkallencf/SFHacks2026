@@ -82,21 +82,22 @@ export default function SFMap({ searchAddress }) {
             })
             .then(res => res.json())
             .then((payload) => {
-                const data = payload.nearbyLocations; // <-- correct extraction
+                const points = payload.nearbyLocations;
+                const routes = payload.routesToPoints;
 
-                setPlacesData(data);
+                setPlacesData(points);
 
                 // Clear out old markers on the map
                 placeMarkers.current.forEach((mark) => mark.setMap(null));
                 placeMarkers.current = [];
 
+                const infoWindow = new window.google.maps.InfoWindow();
+
                 // Put each marker on the map
-                Object.values(data).forEach((placesArray) => {
-                    placesArray.forEach((place) => {
+                Object.entries(points).forEach(([category, placesArray]) => {
+                    placesArray.forEach((place, idx) => {
                         const lat = place.location?.latitude;
                         const lng = place.location?.longitude;
-
-                        if (typeof lat !== "number" || typeof lng !== "number") return;
 
                         const marker = new window.google.maps.Marker({
                             position: { lat, lng },
@@ -104,6 +105,38 @@ export default function SFMap({ searchAddress }) {
                             icon: {
                                 url: "http://maps.google.com/mapfiles/ms/icons/green-dot.png"
                             }
+                        });
+
+                        const routeObj = routes?.[category]?.distancesAlignedByIndex?.[idx] ?? null;
+
+                        marker.addListener("click", () => {
+                            let milesText = "N/A";
+                            let timeText = "N/A";
+
+                            if (routeObj && routeObj.ok && typeof routeObj.distanceMeters === "number") {
+                                const miles = routeObj.distanceMeters / 1609.344;
+                                milesText = miles.toFixed(2);
+                                const dur = routeObj.duration;
+
+                                if (typeof dur === "string" && dur.endsWith("s")) {
+                                    timeText = dur.slice(0, -1);
+                                    let temp = Number(timeText);
+                                    let minutes = Math.floor(temp / 60);
+                                    let seconds = temp % 60;
+                                    timeText = minutes + " min " + seconds + " s";
+                                }
+                            }
+
+                            const name = place.displayName?.text || category;
+
+                            infoWindow.setContent(
+                                `<div>
+                                    <div><b>${name}</b></div>
+                                    <div>Distance: ${milesText} mi</div>
+                                    <div>Time: ${timeText}</div>
+                                </div>`
+                            );
+                            infoWindow.open({ map: mapRef.current, anchor: marker });
                         });
 
                         placeMarkers.current.push(marker);
@@ -120,12 +153,6 @@ export default function SFMap({ searchAddress }) {
             onLoad={initializeMap} />
             {/* Container for the map */}
             <div ref={mapDiv} style={{ width: "100%", height: "91.5vh" }} />
-            {/* Shows each nearby location */}
-            {/* <div style={{ padding: 12, maxHeight: 240, overflow: "auto" }}>
-                <pre style={{ whiteSpace: "pre-wrap" }}>
-                    {placesData ? JSON.stringify(placesData, null, 2) : ""}
-                </pre>
-            </div> */}
         </>
     );
 }
