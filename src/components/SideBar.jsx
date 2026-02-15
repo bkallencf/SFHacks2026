@@ -2,11 +2,11 @@
 import { useState } from "react";
 
 export default function SideBar({ scores }) {
-    const [open, setOpen] = useState(false);
+    const [open, setOpen] = useState(true);
 
     return (
         <>
-            {/* Hamburger button (positioned upper-left, below your search box area) */}
+            {/* Hamburger button */}
             <button type="button" onClick={() => setOpen(true)}
                 style={{ position: "fixed", top: 170, left: 12, zIndex: 1000, width: 44, height: 44,
                          borderRadius: 10, border: "1px solid #000000", background: "white", cursor: "pointer",
@@ -25,7 +25,7 @@ export default function SideBar({ scores }) {
                           transform: open ? "translateX(0)" : "translateX(-105%)", transition: "transform 200ms ease", padding: 16,
                           boxSizing: "border-box", fontFamily: "Courier New" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ fontWeight: 600, color: "white" }}>Walkability Score</div>
+                    <div style={{ fontWeight: 600, color: "white" }}>[Placeholder_Name]</div>
                     <button type="button" onClick={() => setOpen(false)} style={{ border: "1px solid #ccc",
                             background: "white", borderRadius: 8, padding: "6px 10px", cursor: "pointer" }}
                             aria-label="Close sidebar">
@@ -34,12 +34,14 @@ export default function SideBar({ scores }) {
                 </div>
                 <div style={{ marginTop: 12, color: "white" }}>
                     {scores == null ? (
-                        <div>Search a location to start comparing walkability scores</div>
+                        <p>Welcome to [Placeholder]! Use the search bar above to find alternative locales close to home, 
+                            or view scores to see how walkable your future home is.
+                        </p>
                     ) : (
                     <>
-                        <div>Total: {Number(scores.total).toFixed(5)}</div>
-                            <br />
-                        {Object.keys(scores).filter((key) => key !== "total").map((key) => (
+                        {/* Prints out scores for each category, starting w/ total */}
+                        <div style={{ fontWeight: 600, color: "white" }}>Walkability Scores</div>
+                        {Object.keys(scores).map((key) => (
                             <div key={key}>
                                 {key.replace(/(^|_)([a-z])/g, (_, sep, l) => (sep ? " " : "") + l.toUpperCase())}: {Number(scores[key]).toFixed(5)}
                                 <br />

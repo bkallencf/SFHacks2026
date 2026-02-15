@@ -5,7 +5,7 @@ import { calculateWalkability } from "@/lib/calcWalkability";
 // Scans in a ~1.5 mile radius for groceries, parks, schools, and shopping centers
 export async function POST(request) {
     const { lat, lng } = await request.json();
-    const queryLocations = ["grocery_store", "park", "school", "shopping_mall"];
+    const queryLocations = ["grocery_store", "bus_stop", "park", "school", "shopping_mall"];
     const nearbyLocations = {};
     const routesToPoints = {};
 
@@ -43,15 +43,22 @@ export async function POST(request) {
         const candidates = locationInfo.places || [];
         let distances = await computeWalkingDistances(lat, lng, candidates);
         
-        nearbyLocations[queryLocations[i]] = candidates;
+        // Removes duplicates w/ the same name
+        const {
+            places: removedDupesPlaces,
+            distances: removedDupesDistances,
+        } = removeDuplicates(candidates, distances);
+        
+        nearbyLocations[queryLocations[i]] = removedDupesPlaces;
+        
         routesToPoints[queryLocations[i]] = {
-            candidatesCount: candidates.length,
-            distancesAlignedByIndex: distances
+            candidatesCount: removedDupesPlaces.length,
+            distancesAlignedByIndex: removedDupesDistances
         };
 
         debugEntry.categories[queryLocations[i]] = {
-            candidates,
-            walkingDistancesAlignedByIndex: distances
+            removedDupesPlaces,
+            walkingDistancesAlignedByIndex: removedDupesDistances
         };
     }
 
@@ -149,4 +156,22 @@ async function readRouteMatrixElements(resp) {
             .filter(Boolean)
             .map((line) => JSON.parse(line));
     }
+}
+
+function removeDuplicates(places, distances) {
+    const seen = new Set();
+    const newPlaces = [];
+    const newDistances = [];
+
+    for (let i = 0; i < places.length; i++) {
+        const name = (places[i]?.displayName?.text || "").trim().toLowerCase();
+        if (!name) continue;
+        if (seen.has(name)) continue;
+
+        seen.add(name);
+        newPlaces.push(places[i]);
+        newDistances.push(distances[i]);
+    }
+
+    return { places: newPlaces, distances: newDistances };
 }

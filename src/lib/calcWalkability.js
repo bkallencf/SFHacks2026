@@ -1,7 +1,7 @@
 // Calculates the scores for a given locations walkability; aiming for values btwn 0-2
 export function calculateWalkability(nearbyLocations, routesToPoints) {
     const distances = buildDistanceMap(nearbyLocations, routesToPoints);
-    const weights = {grocery_store: 2, shopping_mall: 1.3, school: 1.2, parks: 1}
+    const weights = {grocery_store: 2, bus_stop: 1.5, shopping_mall: 1.3, school: 1.2, parks: 1}
     const scores = {total: 0};
 
     Object.entries(distances).forEach(([category, distanceArray]) => {
@@ -11,10 +11,18 @@ export function calculateWalkability(nearbyLocations, routesToPoints) {
         // Takes in the 5 closest locations at most and ignores the rest
         for (let i = 0; i < distanceArray.length && i < 5; i++) {
             sectionScore += 5000 - distanceArray[i];
+
+            if (i == 0) {
+                sectionScore = sectionScore * 2;
+            }
         }
         
         // Dividing by 5 rewards areas that are close to many things
-        sectionScore = (sectionScore / 5) / 5000;
+        sectionScore = (sectionScore / 5) / 6000;
+
+        if (sectionScore < 0) {
+            sectionScore = 0;
+        }
         scores[category] = sectionScore;
     });
     
@@ -26,7 +34,7 @@ export function calculateWalkability(nearbyLocations, routesToPoints) {
             scores.total += scores[category]*weights[category];
         }
     });
-    scores.total = scores.total / Object.keys(scores).length;
+    scores.total = Math.sqrt(scores.total / (Object.keys(scores).length * 1.44));
 
     return scores;
 }

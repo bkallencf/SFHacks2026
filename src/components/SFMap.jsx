@@ -8,6 +8,8 @@ export default function SFMap({ searchAddress, onScores }) {
     const markerRef = useRef(null);   // Red marker for the user's point
     const boundsRef = useRef(null);   // Bounds of the map for checking address validity
     const geoCoderRef = useRef(null); // Turns addresses into coords
+    const directionsServiceRef = useRef(null);
+    const routeRenderersRef = useRef({});
 
     // Map boundary corners
     const SFBounds = {
@@ -93,6 +95,14 @@ export default function SFMap({ searchAddress, onScores }) {
                 placeMarkers.current.forEach((mark) => mark.setMap(null));
                 placeMarkers.current = [];
 
+                // Preparation to draw paths
+                const closest = pickClosestByCategory(points, routes);
+                directionsServiceRef.current = new window.google.maps.DirectionsService();
+                
+                // Get rid of all paths
+                Object.values(routeRenderersRef.current).forEach((r) => r.setMap(null));
+                routeRenderersRef.current = {};
+
                 const infoWindow = new window.google.maps.InfoWindow();
 
                 // Put each marker on the map
@@ -144,6 +154,36 @@ export default function SFMap({ searchAddress, onScores }) {
                         placeMarkers.current.push(marker);
                     });
                 });
+
+                Object.entries(closest).forEach(([category, dest]) => {
+                    drawRoute(category, { lat, lng }, dest);
+                });
+
+                function drawRoute(category, origin, destination) {
+                    const svc = directionsServiceRef.current;
+                    if (!svc) return;
+
+                    svc.route(
+                        {
+                            origin,
+                            destination,
+                            travelMode: window.google.maps.TravelMode.WALKING,
+                        },
+                        (result, status) => {
+                            if (status !== "OK" || !result) return;
+
+                            // One renderer per category
+                            const renderer = new window.google.maps.DirectionsRenderer({
+                                map: mapRef.current,
+                                suppressMarkers: true, // Already drew own markers
+                                preserveViewport: true, // Don't lock to center
+                            });
+
+                            renderer.setDirections(result);
+                            routeRenderersRef.current[category] = renderer;
+                        }
+                    );
+                }
             });
         });
 
@@ -157,4 +197,37 @@ export default function SFMap({ searchAddress, onScores }) {
             <div ref={mapDiv} style={{ width: "100%", height: "91.5vh" }} />
         </>
     );
+}
+
+function pickClosestByCategory(points, routes) {
+    const chosen = {};
+
+    Object.entries(points).forEach(([category, placesArray]) => {
+        const aligned = routes?.[category]?.distancesAlignedByIndex || [];
+
+        let bestIdx = -1;
+        let bestMeters = Infinity;
+
+        for (let i = 0; i < placesArray.length; i++) {
+            const r = aligned[i];
+
+            if (!r || r.ok !== true) continue;
+            if (typeof r.distanceMeters !== "number") continue;
+
+            if (r.distanceMeters < bestMeters) {
+                bestMeters = r.distanceMeters;
+                bestIdx = i;
+            }
+        }
+
+        if (bestIdx !== -1) {
+            const p = placesArray[bestIdx];
+            chosen[category] = {
+                lat: p.location.latitude,
+                lng: p.location.longitude,
+            };
+        }
+    });
+
+    return chosen;
 }
