@@ -1,15 +1,17 @@
 "use client";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Script from "next/script";
 
 export default function SFMap({ searchAddress, onScores }) {
-    const mapRef = useRef(null);      // The map itself
-    const mapDiv = useRef(null);      // Box for the map to sit in
-    const markerRef = useRef(null);   // Red marker for the user's point
-    const boundsRef = useRef(null);   // Bounds of the map for checking address validity
-    const geoCoderRef = useRef(null); // Turns addresses into coords
-    const directionsServiceRef = useRef(null);
-    const routeRenderersRef = useRef({});
+    const mapRef = useRef(null);                            // The map itself
+    const mapDiv = useRef(null);                            // Box for the map to sit in
+    const markerRef = useRef(null);                         // Red marker for the user's point
+    const boundsRef = useRef(null);                         // Bounds of the map for checking address validity
+    const geoCoderRef = useRef(null);                       // Turns addresses into coords
+    const directionsServiceRef = useRef(null);              // Part of getting the path to locations
+    const routeRenderersRef = useRef({});                   // Other part to render paths to nearest locations on the map
+    const [showHeatmap, setShowHeatmap] = useState(false);  // Toggles the heatmap
+    const heatmapRef = useRef(null);                        // Heatmap to show which areas are more walkable
 
     // Map boundary corners
     const SFBounds = {
@@ -189,12 +191,107 @@ export default function SFMap({ searchAddress, onScores }) {
 
     }, [searchAddress]);
 
+    async function loadHeatmapLayer() {
+        if (!window.google || !mapRef.current) return;
+
+        const res = await fetch("/heatmap.json", { cache: "no-store" });
+        const { points } = await res.json();
+
+        const cleaned = points
+            .map((p) => ({
+                lat: p.lat,
+                lng: p.lng,
+                weight: toCleanWeight(p.weight),
+            }))
+            .filter((p) => p.weight > 0);
+
+        const raw = cleaned.map(p => p.weight);
+
+        // compute bell values
+        let bells = cleaned.map((p, i) => gaussianBell(raw[i], 0.95, 0.1));
+
+        // optional normalize so highest bell is 1
+        bells = normalizeArray(bells);
+
+        const data = cleaned.map((p, i) => ({
+            location: new window.google.maps.LatLng(p.lat, p.lng),
+            weight: bells[i],
+        }));
+
+        if (!heatmapRef.current) {
+            heatmapRef.current = new window.google.maps.visualization.HeatmapLayer({
+                data,
+                dissipating: false,
+                radius: 0.0034,
+                opacity: 0.6,
+            });
+        } else {
+            heatmapRef.current.setData(data);
+        }
+    }
+
+    function gaussianBell(w, mu = 0.7, sigma = 0.06) {
+        w = Math.max(0, Math.min(1, w));
+        const x = (w - mu);
+        return Math.exp(- (x * x) / (2 * sigma * sigma));
+    }
+
+    function normalizeArray(arr) {
+        const mn = Math.min(...arr);
+        const mx = Math.max(...arr);
+        if (mx <= mn) return arr.map(() => 0);
+        return arr.map(v => (v - mn) / (mx - mn));
+    }
+
+    function toCleanWeight(w) {
+        const n = Number(w);
+        if (!Number.isFinite(n)) return 0;        // kills NaN/undefined/null/""
+        if (n <= 0) return 0;
+        if (n >= 1) return 1;
+        return n;
+    }
+
+    function showHeat() {
+        if (heatmapRef.current) heatmapRef.current.setMap(mapRef.current);
+    }
+
+    function hideHeat() {
+        if (heatmapRef.current) heatmapRef.current.setMap(null);
+    }
+
+    useEffect(() => {
+        if (!showHeatmap) {
+            hideHeat();
+            return;
+        }
+
+        (async () => {
+            if (!heatmapRef.current) await loadHeatmapLayer();
+            showHeat();
+        })();
+    }, [showHeatmap]);
+
     return (
         <>
-            <Script src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_MAPS_KEY}&v=weekly&libraries=places`} strategy="afterInteractive"
-            onLoad={initializeMap} />
+            <Script src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_MAPS_KEY}&v=weekly&libraries=places,visualization`} strategy="afterInteractive" onLoad={initializeMap} />
             {/* Container for the map */}
             <div ref={mapDiv} style={{ width: "100%", height: "91.5vh" }} />
+            <button
+                type="button"
+                onClick={() => setShowHeatmap((v) => !v)}
+                style={{
+                    position: "fixed",
+                    top: 740,
+                    left: 1300,
+                    zIndex: 1200,
+                    padding: "8px 10px",
+                    borderRadius: 10,
+                    border: "1px solid #000",
+                    background: "white",
+                    cursor: "pointer",
+                }}>
+                {showHeatmap ? "Hide heatmap" : "Show heatmap"}
+            </button>
         </>
     );
 }
